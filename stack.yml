@@ -1,0 +1,137 @@
+version: '3'
+services:
+    gateway:
+        image: accretio-hub.advyteam.com/gateway
+        environment:
+            - SPRING_PROFILES_ACTIVE=dev,swagger
+            - JAVA_OPTS=-Xmx512m -Xms256m
+            - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://admin:$${jhipster.registry.password}@jhipster-registry:8761/eureka
+            - SPRING_CLOUD_CONFIG_URI=http://admin:$${jhipster.registry.password}@jhipster-registry:8761/config
+            - SPRING_DATA_MONGODB_URI=mongodb://gatewayuser:usergateway&2017@accretio-mongodb:27017/gateway
+        ports:
+            - 8080:8080
+
+
+    uaa:
+        image: accretio-hub.advyteam.com/uaa
+        environment:
+            - SPRING_PROFILES_ACTIVE=dev,swagger
+            - JAVA_OPTS=-Xmx512m -Xms256m
+            - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://admin:$${jhipster.registry.password}@jhipster-registry:8761/eureka
+            - SPRING_CLOUD_CONFIG_URI=http://admin:$${jhipster.registry.password}@jhipster-registry:8761/config
+            - SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS=kafka
+            - SPRING_CLOUD_STREAM_KAFKA_BINDER_ZK_NODES=zookeeper
+            - SPRING_CLOUD_STREAM_SCHEMAREGISTRYCLIENT_ENDPOINT=http://schema-registry:8762/
+            - SPRING_DATA_MONGODB_URI=mongodb://uaauser:useruaa&2017@accretio-mongodb:27017/uaa
+        volumes:
+            - ./ssl:/etc/ssl
+
+    emitter:
+        image: accretio-hub.advyteam.com/emitter
+        environment:
+            - EMITTER_PROFILE=prod
+            - MONGODB_HOST=accretio-mongodb
+            - MONGODB_PORT=27017
+            - MONGODB_DATABASE=uaa
+            - MONGODB_USERNAME=uaauser
+            - MONGODB_PASSWORD=useruaa&2017
+        ports:
+            - "8084:8084"
+            - "8089:8089"
+
+    front:
+        image: accretio-hub.advyteam.com/front
+        ports:
+            - 80:80
+            - 443:443
+        volumes:
+            - ./nginx/nginx.conf-https:/etc/nginx/nginx.conf
+            - ./ssl:/etc/ssl
+            - ./logs/:/tmp/logs
+        tty: true
+
+    accretio-mongodb:
+        image: mongo:3.4.5
+        ports:
+            - 27017:27017
+        environment:
+            - MONGO_INITDB_ROOT_USERNAME=accretioadmin
+            - MONGO_INITDB_ROOT_PASSWORD=adminaccretio&2017
+        command:
+            - '-f'
+            - '/etc/mongod.conf'
+        volumes:
+            - ./data/db:/data/db
+            - ./data/mongod.conf:/etc/mongod.conf
+            - ./data/mongo-entrypoint/:/docker-entrypoint-initdb.d/
+
+    accretio-mysql:
+        image: mysql:5.7.18
+        ports:
+            - 3306:3306
+        environment:
+            - MYSQL_ROOT_PASSWORD=root
+        command: mysqld --lower_case_table_names=1 --skip-ssl --character_set_server=utf8 --explicit_defaults_for_timestamp
+        volumes:
+            - ./data/mysqldb:/var/lib/mysql
+            - ./data/mysql-entrypoint:/docker-entrypoint-initdb.d
+
+
+    rabbit:
+        image: rabbitmq:3-management
+        environment:
+            - RABBITMQ_ERLANG_COOKIE=SWQOKODSQALRPCLNMEQG
+            - RABBITMQ_DEFAULT_USER=guest
+            - RABBITMQ_DEFAULT_PASS=guest
+            - RABBITMQ_DEFAULT_VHOST=/
+        ports:
+            - 15672:15672
+            - 5672:5672
+            - 61613:61613
+        volumes:
+            - "./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins"
+
+    jhipster-registry:
+        image: accretio-hub.advyteam.com/jhipster-registry
+        environment:
+            - SPRING_PROFILES_ACTIVE=native,dev
+            - _JAVA_OPTIONS=-Xmx512m -Xms256m
+            - SECURITY_USER_PASSWORD=admin
+            - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=file:./central-config/docker-config/
+        volumes:
+            - ./central-server-config:/central-config
+        ports:
+            - 8761:8761
+    schema-registry:
+        image: accretio-hub.advyteam.com/schema-registry
+        environment:
+            - SPRING_PROFILES_ACTIVE=prod,swagger
+            - _JAVA_OPTIONS=-Xmx512m -Xms256m
+            - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://admin:$${jhipster.registry.password}@jhipster-registry:8761/eureka
+            - SPRING_CLOUD_CONFIG_URI=http://admin:$${jhipster.registry.password}@jhipster-registry:8761/config
+            - SPRING_DATASOURCE_URL=jdbc:mysql://accretio-mysql:3306/schema-registry
+            - SPRING_DATASOURCE_PASSWORD=schema-registry
+            - SPRING_DATASOURCE_USERNAME=schema-registry
+
+
+    postfix:
+      image: hashbang/postfix
+      ports:
+          - "25:25"
+      volumes:
+          - ./postfix/main.cf:/etc/postfix/main.cf
+
+    zookeeper:
+        image: wurstmeister/zookeeper:3.4.6
+        
+    kafka:
+        image: wurstmeister/kafka:1.0.0
+        environment:
+            KAFKA_ADVERTISED_HOST_NAME: kafka
+            KAFKA_ADVERTISED_PORT: 9092
+            KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+            KAFKA_CREATE_TOPICS: "topic-jhipster:1:1"
+        ports:
+            - 9092:9092
+
+
